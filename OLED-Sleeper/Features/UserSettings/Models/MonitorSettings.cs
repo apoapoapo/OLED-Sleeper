@@ -54,6 +54,11 @@ namespace OLED_Sleeper.Features.UserSettings.Models
         public bool IsActiveOnActiveWindow { get; set; } = false;
 
         /// <summary>
+        /// Gets or sets a value indicating whether the active window should reset idle state.
+        /// </summary>
+        public bool IsActiveOnContentChange { get; set; } = false;
+
+        /// <summary>
         /// Gets the idle timeout in milliseconds, based on <see cref="IdleValue"/> and <see cref="IdleUnit"/>.
         /// </summary>
         public int IdleTimeMilliseconds

@@ -24,6 +24,11 @@
         /// <summary>
         /// System input (keyboard or mouse activity) was detected.
         /// </summary>
-        SystemInput
+        SystemInput,
+
+        /// <summary>
+        /// Monitor content changed
+        /// </summary>
+        ContentChange,
     }
 }

@@ -7,6 +7,8 @@ using OLED_Sleeper.Features.MonitorInformation.Services.Interfaces;
 using OLED_Sleeper.Features.UserSettings.Models;
 using OLED_Sleeper.Native;
 using Serilog;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Windows;
 
@@ -149,7 +151,7 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
         private void ProcessSingleMonitor(ManagedMonitorState monitor, SystemState systemState)
         {
             var timerState = _monitorStates[monitor.Settings.HardwareId];
-            var activityReason = GetActivityReason(monitor, systemState);
+            var activityReason = GetActivityReason(monitor, systemState, timerState);
             bool hasActivityNow = activityReason != ActivityReason.None;
 
             var eventArgs = new MonitorIdleStateEventArgs(
@@ -242,7 +244,7 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
         /// <param name="monitor">The managed monitor.</param>
         /// <param name="state">Current system state.</param>
         /// <returns>The activity reason.</returns>
-        private static ActivityReason GetActivityReason(ManagedMonitorState monitor, SystemState state)
+        private static ActivityReason GetActivityReason(ManagedMonitorState monitor, SystemState state, MonitorTimerState timerState)
         {
             if (IsSystemInputActive(monitor, state))
                 return ActivityReason.SystemInput;
@@ -250,6 +252,8 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
                 return ActivityReason.MousePosition;
             if (IsActiveWindowActive(monitor, state))
                 return ActivityReason.ActiveWindow;
+            if (IsContentChange(monitor, timerState))
+                return ActivityReason.ContentChange;
             return ActivityReason.None;
         }
 
@@ -283,6 +287,62 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
             return false;
         }
 
+        private static uint GetDownsampledScreenHash(Rect bounds, int skipPixels = 64)
+        {
+            System.Drawing.Rectangle drawingBounds = new System.Drawing.Rectangle(
+                (int)bounds.X,
+                (int)bounds.Y,
+                (int)bounds.Width,
+                (int)bounds.Height
+                );
+
+            using (Bitmap bmp = new Bitmap((int)bounds.Width, (int)bounds.Height, PixelFormat.Format32bppArgb))
+            {
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.CopyFromScreen(drawingBounds.Location, System.Drawing.Point.Empty, drawingBounds.Size);
+                }
+
+                BitmapData bmpData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, bmp.PixelFormat);
+                int bytes = Math.Abs(bmpData.Stride) * bmp.Height;
+                byte[] allPixels = new byte[bytes];
+                Marshal.Copy(bmpData.Scan0, allPixels, 0, bytes);
+                bmp.UnlockBits(bmpData);
+
+                uint hash = 2166136261;
+                const uint fnvPrime = 16777619;
+
+                int stride = Math.Abs(bmpData.Stride);
+
+                for (int y = 0; y < bmp.Height; y += skipPixels)
+                {
+                    for (int x = 0; x < bmp.Width; x += skipPixels)
+                    {
+                        int offset = (y * stride) + (x * 4);
+                        byte pixelValue = allPixels[offset];
+
+                        hash ^= pixelValue;
+                        hash *= fnvPrime;
+                    }
+                }
+
+                return hash;
+            }
+        }
+
+        private static bool IsContentChange(ManagedMonitorState monitor, MonitorTimerState timerState)
+        {
+            // If the monitor is in idle state and it gets black this would trigger content change, so it is only available to keep it active but not to activate it
+            if (monitor.Settings.IsActiveOnContentChange && timerState.CurrentState != MonitorStateMachine.Idle) { 
+                uint newHash = GetDownsampledScreenHash(monitor.Bounds);
+                if (newHash != monitor.lastHash) {
+                    monitor.lastHash = newHash;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         // === System State Helpers ===
 
         /// <summary>
@@ -293,7 +353,7 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
         {
             uint idleTime = GetSystemIdleTimeMilliseconds();
             NativeMethods.GetCursorPos(out var nativePoint);
-            Point cursorPosition = new(nativePoint.X, nativePoint.Y);
+            System.Windows.Point cursorPosition = new(nativePoint.X, nativePoint.Y);
             nint foregroundWindowHandle = NativeMethods.GetForegroundWindow();
             Rect windowRect = GetForegroundWindowRect(foregroundWindowHandle);
             return new SystemState(idleTime, cursorPosition, windowRect, foregroundWindowHandle);
@@ -353,6 +413,7 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
             public int DisplayNumber { get; set; }
             public MonitorSettings Settings { get; set; }
             public Rect Bounds { get; set; }
+            public uint lastHash { get; set; }
         }
 
         /// <summary>
@@ -370,11 +431,11 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
         private readonly struct SystemState
         {
             public readonly uint IdleTimeMilliseconds;
-            public readonly Point CursorPosition;
+            public readonly System.Windows.Point CursorPosition;
             public readonly Rect ForegroundWindowRect;
             public readonly nint ForegroundWindowHandle;
 
-            public SystemState(uint idleTime, Point cursorPosition, Rect windowRect, nint windowHandle)
+            public SystemState(uint idleTime, System.Windows.Point cursorPosition, Rect windowRect, nint windowHandle)
             {
                 IdleTimeMilliseconds = idleTime;
                 CursorPosition = cursorPosition;

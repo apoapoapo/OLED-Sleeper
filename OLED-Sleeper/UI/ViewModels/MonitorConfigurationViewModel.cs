@@ -223,6 +223,26 @@ namespace OLED_Sleeper.UI.ViewModels
             }
         }
 
+
+        private bool _IsActiveOnContentChange;
+        private bool _initialIsActiveOnContentChange;
+
+        /// <summary>
+        /// Gets or sets whether the content of a monitor changed.
+        /// </summary>
+        public bool IsActiveOnContentChange
+        {
+            get => _IsActiveOnContentChange;
+            // --- Updated: Notifies error property when changed ---
+            set
+            {
+                _IsActiveOnContentChange = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ActiveConditionsError));
+                UpdateDirtyState();
+            }
+        }
+
         #endregion Properties
 
         /// <summary>
@@ -261,7 +281,8 @@ namespace OLED_Sleeper.UI.ViewModels
                        SelectedTimeUnit != _initialSelectedTimeUnit ||
                        IsActiveOnInput != _initialIsActiveOnInput ||
                        IsActiveOnMousePosition != _initialIsActiveOnMousePosition ||
-                       IsActiveOnActiveWindow != _initialIsActiveOnActiveWindow;
+                       IsActiveOnActiveWindow != _initialIsActiveOnActiveWindow || 
+                       IsActiveOnContentChange != _initialIsActiveOnContentChange;
 
             OnPropertyChanged(nameof(IsDirty));
             OnDirtyStateChanged?.Invoke();
@@ -280,6 +301,7 @@ namespace OLED_Sleeper.UI.ViewModels
             _initialIsActiveOnInput = IsActiveOnInput;
             _initialIsActiveOnMousePosition = IsActiveOnMousePosition;
             _initialIsActiveOnActiveWindow = IsActiveOnActiveWindow;
+            _initialIsActiveOnContentChange = IsActiveOnContentChange;
             UpdateDirtyState();
         }
 
@@ -297,6 +319,7 @@ namespace OLED_Sleeper.UI.ViewModels
             IsActiveOnInput = settings.IsActiveOnInput;
             IsActiveOnMousePosition = settings.IsActiveOnMousePosition;
             IsActiveOnActiveWindow = settings.IsActiveOnActiveWindow;
+            IsActiveOnContentChange = settings.IsActiveOnContentChange;
         }
 
         /// <summary>
@@ -315,7 +338,8 @@ namespace OLED_Sleeper.UI.ViewModels
                 IdleUnit = SelectedTimeUnit,
                 IsActiveOnInput = IsActiveOnInput,
                 IsActiveOnMousePosition = IsActiveOnMousePosition,
-                IsActiveOnActiveWindow = IsActiveOnActiveWindow
+                IsActiveOnActiveWindow = IsActiveOnActiveWindow,
+                IsActiveOnContentChange = IsActiveOnContentChange
             };
         }
 
@@ -363,6 +387,7 @@ namespace OLED_Sleeper.UI.ViewModels
                     case nameof(IsActiveOnInput):
                     case nameof(IsActiveOnMousePosition):
                     case nameof(IsActiveOnActiveWindow):
+                    case nameof(IsActiveOnContentChange):
                         result = ValidateActiveConditions();
                         break;
 
@@ -391,7 +416,7 @@ namespace OLED_Sleeper.UI.ViewModels
         /// <returns>An error message if invalid, otherwise null.</returns>
         private string? ValidateActiveConditions()
         {
-            if (!IsActiveOnInput && !IsActiveOnMousePosition && !IsActiveOnActiveWindow)
+            if (!IsActiveOnInput && !IsActiveOnMousePosition && !IsActiveOnActiveWindow && !IsActiveOnContentChange)
                 return "At least one 'Consider Active When' option must be selected.";
             return null;
         }
