@@ -42,5 +42,10 @@ namespace OLED_Sleeper.Features.MonitorInformation.Models
         /// Gets or sets a value indicating whether DDC/CI is supported by this monitor.
         /// </summary>
         public bool IsDdcCiSupported { get; set; }
+
+        /// <summary>
+        /// Gets or sets the bounding rectangle of the monitors working area (without taskbar) in coordinates.
+        /// </summary>
+        public Rect WorkingArea { get; set; }
     }
 }

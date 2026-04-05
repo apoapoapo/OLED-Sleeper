@@ -7,6 +7,7 @@ using OLED_Sleeper.Features.MonitorInformation.Services.Interfaces;
 using OLED_Sleeper.Features.UserSettings.Models;
 using OLED_Sleeper.Native;
 using Serilog;
+using System.Diagnostics.Eventing.Reader;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -89,6 +90,7 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
                                         {
                                             Settings = setting,
                                             Bounds = monitorInfo.Bounds,
+                                            WorkingArea = monitorInfo.WorkingArea,
                                             DisplayNumber = monitorInfo.DisplayNumber
                                         }).ToList();
 
@@ -287,7 +289,7 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
             return false;
         }
 
-        private static uint GetDownsampledScreenHash(Rect bounds, int skipPixels = 64)
+        private static uint GetDownsampledScreenHash(Rect bounds, int skipPixels = 32)
         {
             System.Drawing.Rectangle drawingBounds = new System.Drawing.Rectangle(
                 (int)bounds.X,
@@ -330,15 +332,94 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
             }
         }
 
+        private static double GetPixelDifferencePercentage(System.Windows.Rect bounds, ref byte[]? lastFramePixels, int skipPixels = 32)
+        {
+            System.Drawing.Rectangle drawingBounds = new System.Drawing.Rectangle(
+                (int)bounds.X, (int)bounds.Y, (int)bounds.Width, (int)bounds.Height);
+
+            using (Bitmap bmp = new Bitmap(drawingBounds.Width, drawingBounds.Height, PixelFormat.Format32bppArgb))
+            {
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.CopyFromScreen(drawingBounds.Location, System.Drawing.Point.Empty, drawingBounds.Size);
+                }
+
+                BitmapData bmpData = bmp.LockBits(new System.Drawing.Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, bmp.PixelFormat);
+                int bytes = Math.Abs(bmpData.Stride) * bmp.Height;
+                byte[] allPixels = new byte[bytes];
+                Marshal.Copy(bmpData.Scan0, allPixels, 0, bytes);
+                bmp.UnlockBits(bmpData);
+
+                int sampledWidth = bmp.Width / skipPixels;
+                int sampledHeight = bmp.Height / skipPixels;
+                int totalSampledPixels = sampledWidth * sampledHeight;
+
+                if (lastFramePixels == null || lastFramePixels.Length != totalSampledPixels)
+                {
+                    lastFramePixels = new byte[totalSampledPixels];
+                }
+
+                int changedPixelsCount = 0;
+                int pixelIndex = 0;
+                int stride = Math.Abs(bmpData.Stride);
+
+                for (int y = 0; y < bmp.Height && pixelIndex < totalSampledPixels; y += skipPixels)
+                {
+                    for (int x = 0; x < bmp.Width && pixelIndex < totalSampledPixels; x += skipPixels)
+                    {
+                        int offset = (y * stride) + (x * 4);
+                        byte currentPixel = allPixels[offset];
+
+                        if (Math.Abs(currentPixel - lastFramePixels[pixelIndex]) > 5)
+                        {
+                            changedPixelsCount++;
+                        }
+
+                        lastFramePixels[pixelIndex] = currentPixel;
+                        pixelIndex++;
+                    }
+                }
+
+                return ((double)changedPixelsCount / totalSampledPixels) * 100.0;
+            }
+        }
+
+        private static bool checkPixelHash(ManagedMonitorState monitor, Rect rect)
+        {
+            uint newHash = GetDownsampledScreenHash(rect);
+
+            if (newHash != monitor.lastHash)
+            {
+                monitor.lastHash = newHash;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool checkPixelDifference(ManagedMonitorState monitor, Rect rect)
+        {
+            byte[]? pixels = monitor.LastFramePixels;
+            double changedPercentage = GetPixelDifferencePercentage(rect, ref pixels);
+            monitor.LastFramePixels = pixels;
+            System.Diagnostics.Debug.WriteLine($"Change: {changedPercentage}%");
+            if (changedPercentage > 1.0)
+            {
+                return true;
+            }
+            return false;
+        }
+
         private static bool IsContentChange(ManagedMonitorState monitor, MonitorTimerState timerState)
         {
             // If the monitor is in idle state and it gets black this would trigger content change, so it is only available to keep it active but not to activate it
-            if (monitor.Settings.IsActiveOnContentChange && timerState.CurrentState != MonitorStateMachine.Idle) { 
-                uint newHash = GetDownsampledScreenHash(monitor.Bounds);
-                if (newHash != monitor.lastHash) {
-                    monitor.lastHash = newHash;
-                    return true;
-                }
+            if (monitor.Settings.IsActiveOnContentChange && timerState.CurrentState != MonitorStateMachine.Idle) {
+
+                Rect rect = monitor.WorkingArea; // without taskbar
+                // Rect rect = monitor.Bounds; // with taskbar
+
+                // return checkPixelHash(monitor, rect);
+                return checkPixelDifference(monitor, rect);
+
             }
             return false;
         }
@@ -414,6 +495,8 @@ namespace OLED_Sleeper.Features.MonitorIdleDetection.Services
             public MonitorSettings Settings { get; set; }
             public Rect Bounds { get; set; }
             public uint lastHash { get; set; }
+            public Rect WorkingArea { get; set; }
+            public byte[]? LastFramePixels { get; set; }
         }
 
         /// <summary>

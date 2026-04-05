@@ -37,6 +37,11 @@ namespace OLED_Sleeper.Features.MonitorInformation.Services
                             mi.rcMonitor.top,
                             mi.rcMonitor.right - mi.rcMonitor.left,
                             mi.rcMonitor.bottom - mi.rcMonitor.top),
+                        WorkingArea = new Rect(
+                            mi.rcWork.left,
+                            mi.rcWork.top,
+                            mi.rcWork.right - mi.rcWork.left,
+                            mi.rcWork.bottom - mi.rcWork.top),
                         IsPrimary = (mi.dwFlags & 1) == 1,
                         Dpi = dpiX,
                         DisplayNumber = ParseDisplayNumber(mi.szDevice)
