@@ -28,15 +28,16 @@ Benefits include:
 
 ## Features
 
-* **Native WPF Application:** Built from the ground up using native Win32 calls. Requires no external dependencies or third-party tools.
 * **Three Idle Detection Modes:** Customize how the application determines if a monitor is idle:
     * **Mouse:** Tracks cursor movement specifically on the target monitor.
     * **Focused Application:** Tracks activity within the active window currently displayed on that monitor.
     * **System-Wide Input:** Tracks overall keyboard and mouse input across the entire system (similar to standard Windows idle detection).
 * **Per-Monitor Control:** Blackout or dim any monitor independently.
 * **Two Action Modes:** Full blackout or dimming (DDC/CI supported).
-* **Focus Mode:** Temporarily hide secondary screens to reduce distractions.
 * **Instant Wake-Up:** Restore the monitor immediately when activity is detected.
+* **Native WPF Application:** Built from the ground up using native Win32 calls. Requires no external dependencies or third-party tools.
+
+<img width="992" height="812" alt="oled-sleeper-002" src="https://github.com/user-attachments/assets/20022234-fe5f-4573-a4e4-ff5ef07b622b" />
 
 ---
 
