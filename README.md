@@ -24,6 +24,10 @@ Benefits include:
 - Temporarily sleeping secondary monitors while gaming or working 
 - Saving energy on idle screens
 
+<p align="center">
+  <img width="500" height="410" alt="oled-sleeper-002" src="https://github.com/user-attachments/assets/20022234-fe5f-4573-a4e4-ff5ef07b622b" />
+</p>
+
 ---
 
 ## Features
@@ -36,8 +40,6 @@ Benefits include:
 * **Two Action Modes:** Full blackout or dimming (DDC/CI supported).
 * **Instant Wake-Up:** Restore the monitor immediately when activity is detected.
 * **Native WPF Application:** Built from the ground up using native Win32 calls. Requires no external dependencies or third-party tools.
-
-<img width="992" height="812" alt="oled-sleeper-002" src="https://github.com/user-attachments/assets/20022234-fe5f-4573-a4e4-ff5ef07b622b" />
 
 ---
 
