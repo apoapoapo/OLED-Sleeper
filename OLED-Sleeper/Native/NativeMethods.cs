@@ -175,6 +175,21 @@ namespace OLED_Sleeper.Native
         }
 
         /// <summary>
+        /// Places the window above all non-topmost windows.
+        /// </summary>
+        public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+
+        /// <summary>
+        /// Does not activate the window.
+        /// </summary>
+        public const uint SWP_NOACTIVATE = 0x0010;
+
+        /// <summary>
+        /// Use with <see cref="DwmGetWindowAttribute"/> to get the extended frame bounds rectangle.
+        /// </summary>
+        public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+
+        /// <summary>
         /// Delegate for monitor enumeration callback used by <see cref="EnumDisplayMonitors"/>.
         /// </summary>
         /// <param name="hMonitor">Handle to the display monitor.</param>
@@ -264,9 +279,10 @@ namespace OLED_Sleeper.Native
         public static extern IntPtr MonitorFromRect(ref Rect lprc, uint dwFlags);
 
         /// <summary>
-        /// Use with <see cref="DwmGetWindowAttribute"/> to get the extended frame bounds rectangle.
+        /// Places the window at the exact physical coordinates and size (bypasses WPF DIP issues).
         /// </summary>
-        public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
         #endregion Monitor and Display Configuration
 
