@@ -1,5 +1,7 @@
 ﻿using OLED_Sleeper.Features.MonitorBlackout.Services.Interfaces;
 using OLED_Sleeper.Native;
+using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -27,13 +29,14 @@ namespace OLED_Sleeper.Features.MonitorBlackout.Services
             {
                 if (_overlayWindows.ContainsKey(hardwareId)) return;
 
-                var overlay = CreateOverlayWindow(bounds);
+                var overlay = CreateOverlayWindow();
                 overlay.Show();
 
                 nint hwnd = new WindowInteropHelper(overlay).Handle;
                 if (hwnd != nint.Zero)
                 {
                     ApplyNoActivateStyle(hwnd);
+                    PositionOverlayToMonitor(hwnd, bounds);
                     _overlayHandles.Add(hwnd);
                 }
 
@@ -70,15 +73,11 @@ namespace OLED_Sleeper.Features.MonitorBlackout.Services
         #region Private Helpers
 
         /// <summary>
-        /// Creates a new overlay window positioned and sized for the target monitor.
+        /// Creates a new overlay window.
         /// </summary>
-        /// <param name="bounds">The monitor bounds in physical screen coordinates.</param>
         /// <returns>A configured <see cref="Window"/> instance.</returns>
-        private static Window CreateOverlayWindow(Rect bounds)
-        {
-            var (scaleX, scaleY) = GetMonitorDpiScale(bounds);
-
-            return new Window
+        private static Window CreateOverlayWindow() =>
+            new()
             {
                 Cursor = System.Windows.Input.Cursors.None,
                 WindowStyle = WindowStyle.None,
@@ -87,40 +86,24 @@ namespace OLED_Sleeper.Features.MonitorBlackout.Services
                 Background = Brushes.Black,
                 ShowInTaskbar = false,
                 Topmost = true,
-                WindowStartupLocation = WindowStartupLocation.Manual,
-
-                Left = bounds.Left / scaleX,
-                Top = bounds.Top / scaleY,
-                Width = bounds.Width / scaleX,
-                Height = bounds.Height / scaleY
+                WindowStartupLocation = WindowStartupLocation.Manual
             };
-        }
 
         /// <summary>
-        /// Retrieves the DPI scale factor for the monitor that contains the specified bounds.
+        /// Positions the overlay window to exactly cover the monitor using physical screen coordinates.
         /// </summary>
-        /// <param name="physicalBounds">The monitor bounds in physical screen coordinates.</param>
-        /// <returns>The scale factors for the X and Y axes.</returns>
-        private static (double scaleX, double scaleY) GetMonitorDpiScale(Rect physicalBounds)
+        /// <param name="hwnd">The window handle.</param>
+        /// <param name="bounds">The monitor bounds in physical screen coordinates.</param>
+        private static void PositionOverlayToMonitor(nint hwnd, Rect bounds)
         {
-            NativeMethods.Rect rect = new NativeMethods.Rect
-            {
-                left = (int)Math.Floor(physicalBounds.Left),
-                top = (int)Math.Floor(physicalBounds.Top),
-                right = (int)Math.Ceiling(physicalBounds.Right),
-                bottom = (int)Math.Ceiling(physicalBounds.Bottom)
-            };
-
-            IntPtr hMonitor = NativeMethods.MonitorFromRect(ref rect, NativeMethods.MONITOR_DEFAULTTONEAREST);
-            if (hMonitor == IntPtr.Zero)
-                return (1.0, 1.0);
-
-            uint dpiX = 96, dpiY = 96;
-            int hr = NativeMethods.GetDpiForMonitor(hMonitor, NativeMethods.MonitorDpiType.MDT_EFFECTIVE_DPI, out dpiX, out dpiY);
-
-            return hr == 0
-                ? (dpiX / 96.0, dpiY / 96.0)
-                : (1.0, 1.0);
+            NativeMethods.SetWindowPos(
+                hwnd,
+                NativeMethods.HWND_TOPMOST,
+                (int)bounds.Left,
+                (int)bounds.Top,
+                (int)bounds.Width,
+                (int)bounds.Height,
+                NativeMethods.SWP_NOACTIVATE);
         }
 
         /// <summary>
