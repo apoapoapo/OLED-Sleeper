@@ -50,28 +50,52 @@ namespace OLED_Sleeper.Features.MonitorInformation.Services
         /// </summary>
         public void GetCurrentMonitorsAsync()
         {
+            List<MonitorInfo>? cached = null;
+
             lock (_lock)
             {
                 if (_cachedMonitors != null)
                 {
-                    MonitorListReady?.Invoke(this, _cachedMonitors);
-                    return;
+                    // capture current cache and invoke outside lock to avoid deadlocks
+                    cached = _cachedMonitors;
                 }
+
+                if (cached != null)
+                {
+                    // already have cached value, will notify outside lock
+                    // do not start a refresh
+                    goto NotifyCached;
+                }
+
                 if (_refreshTask != null)
                 {
                     Log.Debug("MonitorInfoManager: Refresh already in progress, skipping duplicate native call.");
                     return;
                 }
+
+                // Start a background refresh without holding the lock while doing IO/work
                 _refreshTask = Task.Run(() =>
                 {
-                    RefreshMonitorsInternal();
+                    var monitors = RefreshMonitorsInternal();
+                    List<MonitorInfo>? toNotify;
+
                     lock (_lock)
                     {
-                        MonitorListReady?.Invoke(this, _cachedMonitors);
+                        _cachedMonitors = monitors;
+                        toNotify = _cachedMonitors;
                         _refreshTask = null; // Allow future refreshes if needed
                     }
+
+                    var handlers = MonitorListReady;
+                    handlers?.Invoke(this, toNotify);
                 });
             }
+
+            return;
+
+        NotifyCached:
+            var cachedHandlers = MonitorListReady;
+            cachedHandlers?.Invoke(this, cached);
         }
 
         /// <summary>
@@ -83,12 +107,18 @@ namespace OLED_Sleeper.Features.MonitorInformation.Services
         {
             Task.Run(() =>
             {
+                Log.Information("Manual refresh requested. Re-scanning monitors.");
+                var monitors = RefreshMonitorsInternal();
+
+                List<MonitorInfo>? toNotify;
                 lock (_lock)
                 {
-                    Log.Information("Manual refresh requested. Re-scanning monitors.");
-                    RefreshMonitorsInternal();
-                    MonitorListReady?.Invoke(this, _cachedMonitors);
+                    _cachedMonitors = monitors;
+                    toNotify = _cachedMonitors;
                 }
+
+                var handlers = MonitorListReady;
+                handlers?.Invoke(this, toNotify);
             });
         }
 
@@ -122,11 +152,11 @@ namespace OLED_Sleeper.Features.MonitorInformation.Services
         /// <summary>
         /// Refreshes the monitor cache by retrieving basic info and enriching each monitor with DDC/CI support and hardware ID.
         /// </summary>
-        private void RefreshMonitorsInternal()
+        private List<MonitorInfo> RefreshMonitorsInternal()
         {
             var monitors = _monitorInfoProvider.GetAllMonitorsBasicInfo();
             EnrichMonitorInfoList(monitors);
-            _cachedMonitors = monitors;
+            return monitors;
         }
 
         #endregion Private Methods
